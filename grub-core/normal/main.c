@@ -455,7 +455,9 @@ grub_cmdline_run (int nested)
 {
   grub_err_t err = GRUB_ERR_NONE;
 
-  err = grub_auth_check_authentication (NULL);
+  err = grub_auth_secure_boot ();
+  if (err == GRUB_ERR_NONE)
+    err = grub_auth_check_authentication (NULL);
 
   if (err)
     {

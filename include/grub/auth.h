@@ -32,6 +32,9 @@ grub_err_t grub_auth_unregister_authentication (const char *user);
 
 grub_err_t grub_auth_authenticate (const char *user);
 grub_err_t grub_auth_deauthenticate (const char *user);
+grub_err_t grub_auth_secure_boot (void);
+int grub_is_secure_boot (void);
+grub_err_t grub_auth_verify_signature (void *buffer, grub_uint32_t size);
 grub_err_t grub_auth_check_authentication (const char *userlist);
 
 #endif /* ! GRUB_AUTH_HEADER */

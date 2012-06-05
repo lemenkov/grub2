@@ -24,6 +24,8 @@
 #include <grub/normal.h>
 #include <grub/time.h>
 #include <grub/i18n.h>
+#include <grub/efi/api.h>
+#include <grub/efi/efi.h>
 
 struct grub_auth_user
 {
@@ -195,6 +197,89 @@ grub_username_get (char buf[], unsigned buf_size)
   grub_refresh ();
 
   return (key != '\e');
+}
+
+grub_err_t
+grub_auth_secure_boot (void)
+{
+#ifdef GRUB_MACHINE_EFI
+  grub_size_t datasize = 0;
+  grub_uint8_t *data;
+  grub_efi_guid_t guid = GRUB_EFI_GLOBAL_VARIABLE_GUID;
+  unsigned int x;
+
+  data = grub_efi_get_variable ("SecureBoot", &guid, &datasize);
+  if (!data)
+    return GRUB_ERR_NONE;
+
+  for (x = 0; x < datasize; x++)
+    if (data[x] == 1)
+      return GRUB_ACCESS_DENIED;
+#endif
+
+  return GRUB_ERR_NONE;
+}
+
+int
+grub_is_secure_boot (void)
+{
+  return grub_auth_secure_boot() == GRUB_ACCESS_DENIED;
+}
+
+#define SHIM_LOCK_GUID \
+  { 0x605dab50, 0xe046, 0x4300, {0xab,0xb6,0x3d,0xd8,0x10,0xdd,0x8b,0x23} }
+
+typedef grub_efi_status_t (*EFI_SHIM_LOCK_VERIFY)(void *buffer, grub_efi_uint32_t size);
+
+typedef struct _SHIM_LOCK {
+    EFI_SHIM_LOCK_VERIFY Verify;
+} SHIM_LOCK;
+
+grub_err_t
+grub_auth_verify_signature (void *buffer, grub_uint32_t size)
+{
+#ifdef GRUB_MACHINE_EFI
+  grub_efi_guid_t shim_guid = SHIM_LOCK_GUID;
+  SHIM_LOCK *shim = NULL;
+  grub_efi_handle_t *handles, shim_handle = NULL;
+  grub_efi_uintn_t num_handles, i;
+  grub_efi_status_t status;
+
+  if (!grub_is_secure_boot())
+    return GRUB_ERR_NONE;
+
+  handles = grub_efi_locate_handle (GRUB_EFI_BY_PROTOCOL, &shim_guid, NULL,
+				    &num_handles);
+  if (!handles || num_handles == 0)
+no_verify:
+    return grub_error (GRUB_ACCESS_DENIED, "Could not find signature verification routine");
+
+  for (i = 0; i < num_handles; i++)
+    {
+      shim_handle = handles[i];
+      shim = grub_efi_open_protocol (shim_handle, &shim_guid,
+				     GRUB_EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+      if (shim)
+	break;
+    }
+
+  if (!shim)
+    {
+      grub_free(handles);
+      goto no_verify;
+    }
+
+  status = shim->Verify(buffer, size);
+
+  grub_free(handles);
+
+  if (status == GRUB_EFI_SUCCESS)
+    return GRUB_ERR_NONE;
+
+  return grub_error (GRUB_ACCESS_DENIED, "Signature verification failed");
+#else
+  return GRUB_ERR_NONE;
+#endif
 }
 
 grub_err_t

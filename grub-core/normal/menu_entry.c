@@ -1291,7 +1291,10 @@ grub_menu_entry_run (grub_menu_entry_t entry)
   unsigned i;
   grub_term_output_t term;
 
-  err = grub_auth_check_authentication (NULL);
+
+  err = grub_auth_secure_boot ();
+  if (err == GRUB_ERR_NONE)
+    err = grub_auth_check_authentication (NULL);
 
   if (err)
     {

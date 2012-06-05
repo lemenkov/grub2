@@ -34,6 +34,7 @@
 #include <grub/i386/relocator.h>
 #include <grub/i18n.h>
 #include <grub/lib/cmdline.h>
+#include <grub/auth.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -682,6 +683,9 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
   int relocatable;
   grub_uint64_t preffered_address = GRUB_LINUX_BZIMAGE_ADDR;
 
+  void *buffer;
+  grub_err_t verified;
+
   grub_dl_ref (my_mod);
 
   if (argc == 0)
@@ -694,6 +698,28 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
   if (! file)
     goto fail;
 
+  buffer = grub_malloc(grub_file_size(file));
+  if (!buffer)
+    return grub_errno;
+
+  if (grub_file_read (file, buffer, grub_file_size(file)))
+    {
+      if (!grub_errno)
+	grub_error (GRUB_ERR_BAD_OS, N_("premature end of file %s"),
+		    argv[0]);
+      goto fail;
+    }
+
+  verified = grub_auth_verify_signature(buffer, grub_file_size(file));
+  grub_free(buffer);
+  if (verified != GRUB_ERR_NONE)
+    {
+      grub_errno = verified;
+      goto fail;
+    }
+
+  grub_free(buffer);
+  grub_file_seek(file, 0);
   if (grub_file_read (file, &lh, sizeof (lh)) != sizeof (lh))
     {
       if (!grub_errno)
