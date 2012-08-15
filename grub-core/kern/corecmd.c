@@ -28,6 +28,10 @@
 #include <grub/command.h>
 #include <grub/i18n.h>
 
+#ifdef GRUB_MACHINE_EFI
+#include <grub/efi/efi.h>
+#endif
+
 /* set ENVVAR=VALUE */
 static grub_err_t
 grub_core_cmd_set (struct grub_command *cmd __attribute__ ((unused)),
@@ -80,6 +84,11 @@ grub_core_cmd_insmod (struct grub_command *cmd __attribute__ ((unused)),
 		      int argc, char *argv[])
 {
   grub_dl_t mod;
+
+#ifdef GRUB_MACHINE_EFI
+  if (grub_efi_secure_boot())
+    return grub_error (GRUB_ERR_ACCESS_DENIED, N_("Secure Boot forbids insmod"));
+#endif
 
   if (argc == 0)
     return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("one argument expected"));
